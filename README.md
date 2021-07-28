@@ -12,4 +12,6 @@
    1. Git
 3. 数据库
    1. Redis
-
+4. 刷题
+   1. leetcode
+   2. 剑指offer
