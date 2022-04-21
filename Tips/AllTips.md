@@ -1,5 +1,6 @@
 # 问题整理
 ## C++
+### 基础
 #### 什么类不能被继承
 - 将构造函数、析构函数定义为private
 ```c++
@@ -43,6 +44,9 @@ class Super final
   //......
 };
 ```
+### 智能指针
+#### new和make_share
+> https://www.jianshu.com/p/03eea8262c11
 ## Git
 #### Git&&Game
 https://learngitbranching.js.org/?locale=zh_CN
