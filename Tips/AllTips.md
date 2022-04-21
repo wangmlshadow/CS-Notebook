@@ -117,3 +117,12 @@ int main()
 > https://zhuanlan.zhihu.com/p/126279630
 #### Keep-Alive
 > https://bbs.huaweicloud.com/blogs/285330
+## 数据库
+### MySQL
+#### 添加索引
+> https://blog.csdn.net/nangeali/article/details/73384780
+#### 怎么设计一个索引
+> https://segmentfault.com/a/1190000038921156
+### Redis
+#### 缓存雪崩、穿透、击穿
+> https://segmentfault.com/a/1190000022029639
