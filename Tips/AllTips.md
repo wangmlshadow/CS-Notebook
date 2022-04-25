@@ -1,4 +1,13 @@
 # 问题整理
+## 矿山
+- https://www.tpvlog.com
+- https://segmentfault.com/u/magebyte
+
+## 书籍
+- https://www.kancloud.cn/jxm_zn/cpp_concurrency_in_action/264955
+- https://changkun.de/modern-cpp/zh-cn/05-pointers/
+
+
 ## C++
 ### 基础
 #### 什么类不能被继承
