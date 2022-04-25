@@ -130,3 +130,9 @@ int main()
 ### Redis
 #### 缓存雪崩、穿透、击穿
 > https://segmentfault.com/a/1190000022029639
+
+
+## 分布式系统
+#### 综述
+> https://www.tpvlog.com/article/62
+### 
