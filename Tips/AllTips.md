@@ -2,6 +2,15 @@
 ## 矿山
 - https://www.tpvlog.com
 - https://segmentfault.com/u/magebyte
+- https://github.com/linyacool/WebServer
+- https://github.com/donnemartin/system-design-primer/blob/master/README-zh-Hans.md#%E4%B8%BB%E4%BB%8E%E5%A4%8D%E5%88%B6
+- https://labuladong.github.io/algo/
+- https://learnku.com/docs/the-way-to-go/108-garbage-collection-and-setfinalizer/3645
+- https://www.liwenzhou.com/posts/Go/golang-menu/
+- https://www.tpvlog.com/article/184
+- https://segmentfault.com/u/magebyte
+- https://www.kancloud.cn/jxm_zn/cpp_concurrency_in_action/264955
+- https://changkun.de/modern-cpp/zh-cn/05-pointers/
 
 ## 书籍
 - https://www.kancloud.cn/jxm_zn/cpp_concurrency_in_action/264955
