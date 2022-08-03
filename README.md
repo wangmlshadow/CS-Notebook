@@ -1,8 +1,10 @@
 # CS-Notebook
 
-*Author：wangml*
-
-**用于整理学过的知识，包括操作系统等专业课、语言类学习等**
+> Author：wangmaolin
+>
+> Date：2022-08-03
+>
+> 知识整理
 
 ## 大纲
 
