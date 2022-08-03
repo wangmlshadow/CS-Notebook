@@ -1,0 +1,3 @@
+/root/pkg/leveldb/examples/_1_open_options/build/CMakeFiles/rebuild_cache.dir
+/root/pkg/leveldb/examples/_1_open_options/build/CMakeFiles/edit_cache.dir
+/root/pkg/leveldb/examples/_1_open_options/build/CMakeFiles/LevelDBTest.dir

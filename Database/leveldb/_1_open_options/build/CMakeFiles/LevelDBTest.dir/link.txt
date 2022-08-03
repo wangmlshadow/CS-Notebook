@@ -1,0 +1,1 @@
+/usr/bin/c++     CMakeFiles/LevelDBTest.dir/main.cc.o  -o LevelDBTest  -Wl,-Bstatic -lleveldb -Wl,-Bdynamic -lpthread -lm -ldl 

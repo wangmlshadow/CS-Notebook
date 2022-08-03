@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/root/pkg/leveldb/examples/_1_open_options/main.cc
+cassert
+-
+string
+-
+iostream
+-
+leveldb/db.h
+/root/pkg/leveldb/examples/_1_open_options/leveldb/db.h
+leveldb/write_batch.h
+/root/pkg/leveldb/examples/_1_open_options/leveldb/write_batch.h
+
