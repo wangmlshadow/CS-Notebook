@@ -21,6 +21,7 @@
   - Redis
   - MySQL
   - leveldb
+  - How to design a key value database
 - 刷题
   - leetcode
   - 剑指offer
