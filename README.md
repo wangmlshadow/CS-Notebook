@@ -13,6 +13,7 @@
     - Linux0.11代码阅读
   - 计算机网络
   - 设计模式
+  - Coding for SSD：针对SSD设备，如何写出合适的代码
 - 工具的使用
   - Git
   - shell脚本

@@ -1,10 +1,11 @@
 # 记一个最近看的将Linux内核的系列文章
+
 - 作者：闪客 低并发编程（微信公众号）
 - Github：https://github.com/sunym1993/flash-linux0.11-talk
 - Github：https://github.com/mengchaobbbigrui/Linux-0.11code
 
-
 > 以下是笔记内容
+
 ## 最开始的两行代码
 
 首先了解一下寄存器：
@@ -1873,7 +1874,9 @@ void main(void) {
 0x80				system_call
 
 ## 一个新进程的诞生
+
 > 简单说就是从内核态切换到用户态，然后通过 fork 创建出一个新的进程，再之后老进程进入死循环。
+
 ```c
 void main(void)		/* This really IS void, no error here. */
 {			/* The startup routine assumes (well, ...) this */
@@ -1892,25 +1895,29 @@ void main(void)		/* This really IS void, no error here. */
 	for(;;) pause();
 }
 ```
+
 > move_to_user_mode 就是转变为用户态模式。因为 Linux 将操作系统特权级分为用户态与内核态两种，之前都处于内核态，现在要先转变为用户态。一旦转变为了用户态，那么之后的代码将一直处于用户态的模式，除非发生了中断，比如用户发出了系统调用的中断指令，那么此时将会从用户态陷入内核态，不过当中断处理程序执行完之后，又会通过中断返回指令从内核态回到用户态。整个过程被操作系统的机制拿捏的死死的，始终让用户进程处于用户态运行，必要的时候陷入一下内核态，但很快就会被返回而再次回到用户态。
 > fork 创建一个新进程的意思，而且所有用户进程想要创建新的进程，都需要调用这个函数。原来操作系统只有一个执行流，就是我们一直看过来的所有代码，就是进程 0，只不过我们并没有意识到它也是一个进程。调用完 fork 之后，现在又多了一个进程，叫做进程 1。更准确的说法是，我们一路看过来的代码能够被我们自信地称作进程 0 的确切时刻，是我们在 第18回 | 进程调度初始化 sched_init 里为当前执行流添加了一个进程管理结构到 task 数组里，同时开启了定时器以及时钟中断的那一个时刻。因为此时时钟中断到来之后，就可以执行到我们的进程调度程序，进程调度程序才会去这个 task 数组里挑选合适的进程进行切换。所以此时，我们当前执行的代码，才真正有了一个进程的身份，才勉强得到了一个可以被称为进程 0 的资格，毕竟还没有其他进程参与竞争。
 > init 只有进程 1 会走到这个分支来执行。这里的代码可太多了，它本身需要完成如加载根文件系统的任务，同时这个方法将又会创建出一个新的进程 2，在进程 2 里又会加载与用户交互的 shell 程序，此时操作系统就正式成为了用户可用的一个状态了。
 > pause 当没有任何可运行的进程时，操作系统会悬停在这里，达到怠速状态。没啥好说的，我一直强调，操作系统就是由中断驱动的一个死循环。
 
 ## 从内核态到用户态
+
 **进程无法逃出用户态**
+
 > move_to_user_mode 这行代码，作用就是将当前代码的特权级，从内核态变为用户态。一旦转变为了用户态，那么之后的代码将一直处于用户态的模式，除非发生了中断，比如用户发出了系统调用的中断指令，那么此时将会从用户态陷入内核态，不过当中断处理程序执行完之后，又会通过中断返回指令从内核态回到用户态。
-**内核态与用户态的本质-特权级**
+> **内核态与用户态的本质-特权级**
 > 首先从一个最大的视角来看，这一切都源于 CPU 的保护机制。CPU 为了配合操作系统完成保护机制这一特性，分别设计了分段保护机制与分页保护机制。
 > 当前代码所处段的特权级，必须要等于要跳转过去的代码所处的段的特权级，那就只能用户态往用户态跳，内核态往内核态跳，这样就防止了处于用户态的程序，跳转到内核态的代码段中做坏事。
 > 此外还有访问内存数据时也会有数据段的特权级检查，这里就不展开了。最终的效果是，处于内核态的代码可以访问任何特权级的数据段，处于用户态的代码则只可以访问用户态的数据段，这也就实现了内存数据读写的保护。
 > **代码跳转只能同特权级，数据访问只能高特权级访问低特权级。**
-**特权级转换的方式**
+> **特权级转换的方式**
 > Intel 设计了好多种特权级转换的方式，中断和中断返回就是其中的一种。
 > 处于用户态的程序，通过触发中断，可以进入内核态，之后再通过中断返回，又可以恢复为用户态。
 > 而系统调用就是这么玩的，用户通过 int 0x80 中断指令触发了中断，CPU 切换至内核态，执行中断处理程序，之后中断程序返回，又从内核态切换回用户态。
 > 但有个问题是，我们当前的代码，此时就是处于内核态，并不是由一个用户态程序通过中断而切换到的内核态，那怎么回到原来的用户态呢？答案还是，通过中断返回。
 > 没有中断也能中断返回？可以的，Intel 设计的 CPU 就是这样不符合人们的直觉，中断和中断返回的确是应该配套使用的，但也可以单独使用，我们看代码。
+
 ```c
 // git/Linux-0.11/include/asm/system.h
 #define move_to_user_mode() \
@@ -1928,21 +1935,24 @@ __asm__ ("movl %%esp,%%eax\n\t" \
 	"movw %%ax,%%gs" \
 	:::"ax")
 ```
+
 > 那么为什么之前进行了一共五次的压栈操作呢？因为中断返回理论上就是应该和中断配合使用的，而此时并不是真的发生了中断到这里，所以我们得假装发生了中断才行。
 > 怎么假装呢？其实就把栈做做工作就好了，中断发生时，CPU 会自动帮我们做如下的压栈操作。而中断返回时，CPU 又会帮我们把压栈的这些值返序赋值给响应的寄存器。
 > 去掉错误码，刚好是五个参数，所以我们在代码中模仿 CPU 进行了五次压栈操作，这样在执行 iretd 指令时，硬件会按顺序将刚刚压入栈中的数据，分别赋值给 SS、ESP、EFLAGS、CS、EIP 这几个寄存器，这就感觉像是正确返回了一样，让其误以为这是通过中断进来的。
 
 ## 如果让你来设计进程调度
+
 > 进程调度本质是什么？很简单，假如有三段代码被加载到内存中。 进程调度就是让 CPU 一会去程序 1 的位置处运行一段时间，一会去程序 2 的位置处运行一段时间。
-**那么如何实现上述的CPU运行方式呢**
+> **那么如何实现上述的CPU运行方式呢**
 > 第一种办法就是，程序 1 的代码里，每隔几行就写一段代码，主动放弃自己的执行权，跳转到程序 2 的地方运行。然后程序 2 也是如此。但这种依靠程序自己的办法肯定不靠谱。
 > 第二种办法就是，由一个不受任何程序控制的，第三方的不可抗力，每隔一段时间就中断一下 CPU 的运行，然后跳转到一个特殊的程序那里，这个程序通过某种方式获取到 CPU 下一个要运行的程序的地址，然后跳转过去。这个每隔一段时间就中断 CPU 的不可抗力，就是由定时器触发的时钟中断。
 > **而这个时钟中断在sched_init函数里已经设置过了**
 > 这个特殊的程序，就是具体的进程调度函数。
-**上下文环境**
+> **上下文环境**
 > 每个程序最终的本质就是执行指令。这个过程会涉及寄存器，内存和外设端口。
 > **寄存器上下文**
 > 每次切换进程时，都把当前这些寄存器的值存到一个地方，以便之后切换回来的时候恢复。Linux 0.11 就是这样做的，每个进程的结构 task_struct 里面，有一个叫 tss 的结构，存储的就是 CPU 这些寄存器的信息。
+
 ```c
 // git/Linux-0.11code/kernel/sched.c
 struct task_struct {
@@ -2003,10 +2013,12 @@ struct tss_struct {
 	struct i387_struct i387;
 };
 ```
+
 > **内存上下文**
 > cr3 寄存器是指向页目录表首地址的。那么指向不同的页目录表，整个页表结构就是完全不同的一套，那么线性地址到物理地址的映射关系就有能力做到不同。也就是说，在我们刚刚假设的理想情况下，不同程序用不同的内存地址可以做到内存互不干扰。但是有了这个 cr3 字段，就完全可以无需由各个进程自己保证不和其他进程使用的内存冲突，因为只要建立不同的映射关系即可，由操作系统来建立不同的页目录表并替换 cr3 寄存器即可。当然 Linux 0.11 并不是通过替换 cr3 寄存器来实现内存互不干扰的，它的实现更为简单。
 > **运行时间信息**
 > 如何判断一个进程该让出 CPU 了，切换到下一个进程呢？总不能是每次时钟中断时都切换一次吧？一来这样不灵活，二来这完全依赖时钟中断的频率，有点危险。所以一个好的办法就是，给进程一个属性，叫剩余时间片，每次时钟中断来了之后都 -1，如果减到 0 了，就触发切换进程的操作。在 Linux 0.11 里，这个属性就是 counter。
+
 ```c
 // git/Linux-0.11code/kernel/sched.c
 void do_timer(long cpl)
@@ -2027,7 +2039,7 @@ void do_timer(long cpl)
 		next_timer->jiffies--;
 		while (next_timer && next_timer->jiffies <= 0) {
 			void (*fn)(void);
-			
+		
 			fn = next_timer->fn;
 			next_timer->fn = NULL;
 			next_timer = next_timer->next;
@@ -2042,10 +2054,12 @@ void do_timer(long cpl)
 	schedule();  // 如果已经到 0 了，就触发进程调度，选择下一个进程并使 CPU 跳转到那里运行。
 }
 ```
+
 > **优先级**
 > 上面那个 counter 一开始的时候该是多少呢？而且随着 counter 不断递减，减到 0 时，下一轮回中这个 counter 应该赋予什么值呢？其实这俩问题都是一个问题，就是 counter 的初始化问题，也需要有一个属性来记录这个值。往宏观想一下，这个值越大，那么 counter 就越大，那么每次轮到这个进程时，它在 CPU 中运行的时间就越长，也就是这个进程比其他进程得到了更多 CPU 运行的时间。
 > 每次一个进程初始化时，都把 counter 赋值为这个 priority，而且当 counter 减为 0 时，下一次分配时间片，也赋值为这个。
 > **进程状态**
+
 ```c
 // /root/git/Linux-0.11code/include/linux/sched.h
 #define TASK_RUNNING		0
@@ -2056,8 +2070,10 @@ void do_timer(long cpl)
 ```
 
 ## 从一次定时器滴答来看进程调度
+
 > sched_init 开启了定时器，这个定时器每隔一段时间就会向 CPU 发起一个中断信号。这个间隔时间被设置为 10 ms，也就是 100 Hz。发起的中断叫时钟中断，其中断向量号被设置为了 0x20。这样，当时钟中断，也就是 0x20 号中断来临时，CPU 会查找中断向量表中 0x20 处的函数地址，即中断处理函数，并跳转过去执行。这个中断处理函数就是 timer_interrupt。
 > git/Linux-0.11code/kernel/system_call.s
+
 ```bash
 .align 2
 _timer_interrupt:
@@ -2083,7 +2099,9 @@ _timer_interrupt:
 	addl $4,%esp		# task switching to accounting ...
 	jmp ret_from_sys_call
 ```
+
 > git/Linux-0.11code/kernel/sched.c
+
 ```c
 void do_timer(long cpl)
 {
@@ -2103,7 +2121,7 @@ void do_timer(long cpl)
 		next_timer->jiffies--;
 		while (next_timer && next_timer->jiffies <= 0) {
 			void (*fn)(void);
-			
+		
 			fn = next_timer->fn;
 			next_timer->fn = NULL;
 			next_timer = next_timer->next;
@@ -2168,10 +2186,13 @@ void schedule(void)
 	switch_to(next);
 }
 ```
+
 **schedule() **
+
 1. 拿到剩余时间片（counter的值）最大且在 runnable 状态（state = 0）的进程号 next。
 2. 如果所有 runnable 进程时间片都为 0，则将所有进程（注意不仅仅是 runnable 的进程）的 counter 重新赋值（counter = counter/2 + priority），然后再次执行步骤 1。
 3. 最后拿到了一个进程号 next，调用了 switch_to(next) 这个方法，就切换到了这个进程去执行了。
+
 ```c
 // git/Linux-0.11code/include/linux/sched.h
 /*
@@ -2195,10 +2216,13 @@ __asm__("cmpl %%ecx,_current\n\t" \
 	"d" (_TSS(n)),"c" ((long) task[n])); \
 }
 ```
+
 > 这段话就是进程切换的最最最最底层的代码了。其实主要就干了一件事，就是 ljmp 到新进程的 tss 段处。CPU 规定，如果 ljmp 指令后面跟的是一个 tss 段，那么，会由硬件将当前各个寄存器的值保存在当前进程的 tss 中，并将新进程的 tss 信息加载到各个寄存器。
 
 ## 通过fork看一次系统调用
+
 > 看一下fork的实现
+
 ```c
 static inline _syscall0(int,fork)   // 那我们再多说两句，刚刚定义 fork 的系统调用模板函数时，用的是 syscall0，其实这个表示参数个数为 0，也就是 sys_fork 函数并不需要任何参数。
 
@@ -2216,7 +2240,9 @@ errno = -__res; \
 return -1; \
 }
 ```
+
 > 上述代码可以转换成下列形式
+
 ```c
 #define _syscall0(type,name) \
 type name(void) \
@@ -2233,14 +2259,16 @@ type name(void) \
     return -1; \
 }
 ```
+
 > 将宏展开就变成了fork
+
 ```c
 int fork(void) {
      volatile long __res;
     _asm {
         _asm mov eax,__NR_fork		// #define __NR_fork	2
         _asm int 80h   				// 0x80 号软中断的触发，int 80h，set_system_gate(0x80, &system_call);
-        _asm mov __res,eax			
+        _asm mov __res,eax		
     }
     if (__res >= 0)
         return (void) __res;
@@ -2248,7 +2276,9 @@ int fork(void) {
     return -1;
 }
 ```
+
 > 关键指令就是一个 0x80 号软中断的触发，int 80h。其中还有一个 eax 寄存器里的参数是 __NR_fork，这也是个宏定义，值是 2。0x80 号中断的处理函数么？这个是我们在 第18回 | 大名鼎鼎的进程调度就是从这里开始的 sched_init 里面设置的。
+
 ```c
 set_system_gate(0x80, &system_call);
 
@@ -2286,7 +2316,9 @@ _sys_fork:
     addl $20,%esp
 1:  ret
 ```
+
 **系统调用**
+
 > 操作系统通过系统调用，提供给用户态可用的功能，都暴露在 sys_call_table 里了。系统调用统一通过 int 0x80 中断来进入，具体调用这个表里的哪个功能函数，就由 eax 寄存器传过来，这里的值是个数组索引的下标，通过这个下标就可以找到在 sys_call_table 这个数组里的具体函数。同时也可以看出，用户进程调用内核的功能，可以直接通过写一句 int 0x80 汇编指令，并且给 eax 赋值，当然这样就比较麻烦。所以也可以直接调用 fork 这样的包装好的方法，而这个方法里本质也是 int 0x80 以及 eax 赋值而已。
 
 ```c
@@ -2295,8 +2327,10 @@ _sys_fork:
 #define _syscall2(type,name,atype,a,btype,b)
 #define _syscall3(type,name,atype,a,btype,b,ctype,c)
 ```
+
 > 其实 syscall1 就表示有一个参数，syscall2 就表示有两个参数。
 > 那这些参数放在哪里了呢？总得有个约定的地方吧？我们看一个今后要讲的重点函数，execve，是一个通常和 fork 在一起配合的变身函数，在之后的进程 1 创建进程 2 的过程中，就是这样玩的。
+
 ```c
 // git/Linux-0.11code/init/main.c
 void init(void) {
@@ -2380,7 +2414,9 @@ ret_from_sys_call:
     pop %ds
     iret
 ```
+
 > 就是 CPU 中断压入的 5 个值，加上 system_call 手动压入的 7 个值。中断处理程序如果有需要的话，就可以从这里取出它想要的值，包括 CPU 压入的那五个值，或者 system_call 手动压入的 7 个值。
+
 ```c
 EIP = 0x1C  // 取走了位于栈顶 0x1C 位置处的 EIP 的值。
 _sys_execve:
@@ -2402,6 +2438,7 @@ int do_execve(
 ```
 
 ## fork中进程基本信息的复制
+
 ```c
 // git/Linux-0.11code/kernel/system_call.s
 _sys_fork:
@@ -2417,6 +2454,7 @@ _sys_fork:
     addl $20,%esp
 1:  ret
 ```
+
 > 这个方法的意思非常简单，因为存储进程的数据结构是一个 task[64] 数组，这个是在之前 第18回 | 大名鼎鼎的进程调度就是从这里开始的 sched_init 函数的时候设置的。就是先在这个数组中找一个空闲的位置，准备存一个新的进程的结构 task_struct，这个结构之前在 一个新进程的诞生（三）如果让你来设计进程调度 也简单说过了。
 > 这个结构各个字段具体赋什么值呢？通过 copy_process 这个名字我们知道，就是复制原来的进程，也就是当前进程。当前只有一个进程，就是数组中位置 0 处的 init_task.init，也就是零号进程，那自然就复制它咯。
 
@@ -2436,7 +2474,9 @@ int find_empty_process(void) {
     return -EAGAIN;
 }
 ```
+
 > 由于我们现在只有 0 号进程，且 task[] 除了 0 号索引位置，其他地方都是空的，所以这个方法运行完，last_pid 就是 1，也就是新进程被分配的 pid 就是 1，然后即将要加入的 task[] 数组的索引位置，也是 1。
+
 ```c
 // git/Linux-0.11code/kernel/fork.c
 /*
@@ -2513,11 +2553,14 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
     return last_pid;
 }
 ```
+
 > 根据代码我们得知，其含义是将代码在内核态时使用的堆栈栈顶指针指向进程 task_struct 所在的 4K 内存页的最顶端，而且之后的每个进程都是这样被设置的。
 > 就是内存中找个地方存一个 task_struct 结构的东东，并添加到 task[] 数组里的空闲位置处，这个东东的具体字段赋值的大部分都是复制原来进程的。
 
 ## 透过fork来看进程的内存规划
+
 > 首先来看fork的剩下部分，copy_mem
+
 ```c
 // git/Linux-0.11code/kernel/fork.c
 int copy_mem(int nr,struct task_struct * p)
@@ -2546,9 +2589,11 @@ int copy_mem(int nr,struct task_struct * p)
 	return 0;
 }
 ```
+
 > 其实就是新进程 LDT 表项的赋值，以及页表的拷贝。
 > 我们给进程 0 准备的 LDT 的代码段和数据段，段基址都是 0，段限长是 640K。给进程 1，也就是我们现在正在 fork 的这个进程，其代码段和数据段还没有设置。所以第一步，局部描述符表 LDT 的赋值。其中段限长，就是取自进程 0 设置好的段限长，也就是 640K。
 > 上面刚刚讲完段表的赋值，接下来就是页表的复制了。
+
 ```c
 // git/Linux-0.11code/mm/memory.c
 /*
@@ -2609,9 +2654,11 @@ int copy_page_tables(unsigned long from,unsigned long to,long size)
 	return 0;
 }
 ```
+
 > 这个函数要完成什么事情呢？你想，现在进程 0 的线性地址空间是 0 - 64M，进程 1 的线性地址空间是 64M - 128M。我们现在要造一个进程 1 的页表，使得进程 1 和进程 0 最终被映射到的物理空间都是 0 - 64M，这样进程 1 才能顺利运行起来，不然就乱套了。
 
 ## 一个新进程的诞生
+
 - 进程调度机制
   - 进程调度的始作俑者，就是那个每 10ms 触发一次的定时器滴答。而这个滴答将会给 CPU 产生一个时钟中断信号。而这个中断信号会使 CPU 查找中断向量表，找到操作系统写好的一个时钟中断处理函数 do_timer。
   - do_timer 会首先将当前进程的 counter 变量 -1，如果 counter 此时仍然大于 0，则就此结束。但如果 counter = 0 了，就开始进行进程的调度。
@@ -2627,12 +2674,16 @@ int copy_page_tables(unsigned long from,unsigned long to,long size)
   - 到这里进程 1 的初步建立工作已经圆满结束，可以达到运行在 CPU 上的标准了。
 
 ## 写时复制
+
 **背景知识**
+
 - 分段分页
 - **写时复制的本质**
+
 > 在调用 fork() 生成新进程时，新进程与原进程会共享同一内存区。只有当其中一个进程进行写操作时，系统才会为其另外分配内存页面。
 > 进程通过自己的页表占用了一定范围的物理内存空间。调用 fork 创建新进程时，原本页表和物理地址空间里的内容，都要进行复制，因为进程的内存空间是要隔离的嘛。但 fork 函数认为，复制物理地址空间里的内容，比较费时，所以姑且先只复制页表，物理地址空间的内容先不复制。如果只有读操作，那就完全没有影响，复不复制物理地址空间里的内容就无所谓了，这就很赚。但如果有写操作，那就不得不把物理地址空间里的值复制一份，保证进程间的内存隔离。有写操作时，再复制物理内存，就叫写时复制。
 > 有上述的现象，必然是在 fork 时，对页表做了手脚，这回知道为啥储备知识里讲页表结构了吧？同时，只要有写操作，就会触发写时复制这个逻辑，这是咋做到的呢？答案是通过中断，具体是缺页中断。
+
 ```c
 int copy_page_tables(...) {
     ...
@@ -2645,7 +2696,9 @@ int copy_page_tables(...) {
     ...
 }
 ```
+
 > Linux 0.11 的缺页中断处理函数的开头是用汇编写的，看着太闹心了，这里我选 Linux 1.0 的代码给大家看，逻辑是一样的。
+
 ```c
 void do_page_fault(..., unsigned long error_code) {
     ...   
@@ -2687,7 +2740,9 @@ __asm__("movl %%eax,%%cr3"::"a" (0))
 ```
 
 ## 拿到硬盘信息
+
 > 由于 fork 函数一调用，就又多出了一个进程，子进程（进程 1）会返回 0，父进程（进程 0）返回子进程的 ID，所以 init 函数只有进程 1 才会执行。第三部分结束后，就到了现在的第四部分，shell 程序的到来。而整个第四部分的故事，就是这个 init 函数做的事情。
+
 ```c
 // git/Linux-0.11code/init/main.c
 struct drive_info { char dummy[32]; } drive_info;
@@ -2735,9 +2790,11 @@ void init(void)
 	_exit(0);	/* NOTE! _exit, not exit() */
 }
 ```
+
 > setup((void *) &drive_info)  获取硬盘信息
 > drive_info 是来自内存 0x90080 的数据，这部分是由之前 第5回 | 进入保护模式前的最后一次折腾内存 讲的 setup.s 程序将硬盘 1 的参数信息放在这里了，包括柱面数、磁头数、扇区数等信息。
 > setup 是个系统调用，会通过中断最终调用到 sys_setup 函数。关于系统调用的原理，在 第25回 | 通过 fork 看一次系统调用 中已经讲得很清楚了，此处不再赘述。
+
 ```c
 // git/linux-0.11/kernel/blk_drv/hd.c
 static struct hd_struct {
@@ -2758,7 +2815,7 @@ int sys_setup(void * BIOS) {
     hd[0].start_sect = 0;
     hd[0].nr_sects = 
         hd_info[0].head * hd_info[0].sect * hd_info[0].cyl;
-    
+  
     struct buffer_head *bh = bread(0x300, 0);
     struct partition *p = 0x1BE + (void *)bh->b_data; //第一个参数 0x300 是第一块硬盘的主设备号，就表示要读取的块设备是硬盘一。第二个参数 0 表示读取第一个块，一个块为 1024 字节大小，也就是连续读取硬盘开始处 0 ~ 1024 字节的数据。拿到这部分数据后，再取 0x1BE 偏移处，就得到了分区信息。
     for (int i=1;i<5;i++,p++) {	// 给 hd 数组的五项附上了值。这表示硬盘的分区信息，每个分区用 start_sect 和 nr_sects，也就是开始扇区和总扇区数来记录。这些信息是从哪里获取的呢？就是在硬盘的第一个扇区的 0x1BE 偏移处，这里存储着该硬盘的分区信息，只要把这个地方的数据拿到就 OK 了。所以 bread 就是干这事的，从硬盘读取数据。
@@ -2766,7 +2823,7 @@ int sys_setup(void * BIOS) {
         hd[i].nr_sects = p->nr_sects;
     }
     brelse(bh);
-    
+  
     rd_load();		// rd_load 是当有 ramdisk 时，也就是虚拟内存盘，才会执行。
     mount_root();	// mount_root 直译过来就是加载根，再多说几个字是加载根文件系统，有了它之后，操作系统才能从一个根开始找到所有存储在硬盘中的文件，所以它是文件系统的基石，很重要。为了加载根文件系统，或者说所谓的加载根文件系统，就是把硬盘中的数据加载到内存里，以文件系统的数据格式来解读这些信息。所以第一，需要硬盘本身就有文件系统的信息，硬盘不能是裸盘，这个不归操作系统管，你为了启动我的 Linux 0.11，必须拿来一块做好了文件系统的硬盘来。第二，需要读取硬盘的数据到内存，那就必须需要知道硬盘的参数信息，这就是我们本讲所做的事情的意义。
     return (0);
@@ -2780,7 +2837,9 @@ struct hd_i_struct hd_info[] = {}；
 ```
 
 ## 加载根文件系统
+
 > 首先看一下setup 方法中的最后一个函数 mount_root。
+
 ```c
 int sys_setup(void * BIOS) {	// setup 的主要工作就是我们今天所讲的，加载根文件系统。
     ...
@@ -2830,6 +2889,7 @@ void mount_root(void) {
             free++;
 }
 ```
+
 > 从整体上说，它就是要把硬盘中的数据，以文件系统的格式进行解读，加载到内存中设计好的数据结构，这样操作系统就可以通过内存中的数据，以文件系统的方式访问硬盘中的一个个文件了。
 > 那其实搞清楚两个事情即可：第一，硬盘中的文件系统格式是怎样的？第二，内存中用于文件系统的数据结构有哪些？
 > Linux-0.11 中的文件系统是 MINIX 文件系统。该文件系统的结构如下：
@@ -2842,6 +2902,7 @@ void mount_root(void) {
 > 存放具体文件或目录实际信息的块。如果是一个普通文件类型的 inode 指向的块，那里面就直接是文件的二进制信息。如果是一个目录类型的 inode 指向的块，那里面存放的就是这个目录下的文件和目录的 inode 索引以及文件或目录名称等信息。
 
 **继续看init**
+
 ```c
 void init(void) {
     setup((void *) &drive_info);
@@ -2850,9 +2911,11 @@ void init(void) {
     (void) dup(0);
 }
 ```
+
 > 之前 setup 函数的一番折腾，加载了根文件系统，顺着根 inode 可以找到所有文件，就是为了下一行 open 函数可以通过文件路径，从硬盘中把一个文件的信息方便地拿到。
 
 ## 打开终端设备文件
+
 ```c
 void init(void) {
     setup((void *) &drive_info);
@@ -2861,7 +2924,9 @@ void init(void) {
     (void) dup(0);
 }
 ```
+
 > open 函数会触发 0x80 中断，最终调用到 sys_open 这个系统调用函数
+
 ```c
 // git/Linux-0.11code/lib/open.c
 int open(const char * filename, int flag, ...)
@@ -2932,12 +2997,14 @@ int sys_open(const char * filename,int flag,int mode)
 	return (fd);
 }
 ```
+
 > 其实打开一个文件，即刚刚的 open 函数，就是在上述操作后，返回一个 int 型的数值 fd，称作文件描述符。之后我们就可以对着这个文件描述符进行读写。之所以可以这么方便，是由于通过这个文件描述符，最终能够找到其对应文件的 inode 信息，有了这个信息，就能够找到它在磁盘文件中的位置（当然文件还分为常规文件、目录文件、字符设备文件、块设备文件、FIFO 特殊文件等，这个之后再说），进行读写。
 > open 函数返回的为 0 号 fd，这个作为标准输入设备。
 > 接下来的 dup 为 1 号 fd 赋值，这个作为标准输出设备。
 > 再接下来的 dup 为 2 号 fd 赋值，这个作为标准错误输出设备。
 > 那这个 dup 又是什么原理呢？非常简单，首先仍然是通过系统调用方式，调用到 sys_dup 函数。
-**看看dup函數**
+> **看看dup函數**
+
 ```c
 // git/Linux-0.11code/include/unistd.h
 #define __NR_dup	41
@@ -2967,12 +3034,14 @@ static int dupfd(unsigned int fd, unsigned int arg)
 	return arg;
 }
 ```
+
 > 这个函数的逻辑非常单纯，就是从进程的 filp 中找到下一个空闲项，然后把要复制的文件描述符 fd 的信息，统统复制到这里。
 > 那根据上下文，这一步其实就是把 0 号文件描述符，复制到 1 号文件描述符，那么 0 号和 1 号文件描述符，就统统可以通过一条路子，找到最终 tty0 这个设备文件的 inode 信息了。
 > 进程 1 的 init 函数的前四行就讲完了，此时进程 1 已经比进程 0 多了与 外设交互的能力，具体说来是 tty0 这个外设（也是个文件，因为 Linux 下一切皆文件）交互的能力，这句话怎么理解呢？什么叫多了这个能力？
 > 因为进程 fork 出自己子进程的时候，这个 filp 数组也会被复制，那么当进程 1 fork 出进程 2 时，进程 2 也会拥有这样的映射关系，也可以操作 tty0 这个设备，这就是“能力”二字的体现。
 > 而进程 0 是不具备与外设交互的能力的，因为它并没有打开任何的文件，filp 数组也就没有任何作用。
 > 进程 1 刚刚创建的时候，是 fork 的进程 0，所以也不具备这样的能力，而通过 setup 加载根文件系统，open 打开 tty0 设备文件等代码，使得进程 1 具备了与外设交互的能力，同时也使得之后从进程 1 fork 出来的进程 2 也天生拥有和进程 1 同样的与外设交互的能力。
+
 ```c
 void init(void) {
     setup((void *) &drive_info);
@@ -2984,8 +3053,10 @@ void init(void) {
     printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);
 }
 ```
+
 > 接下来的两行是个打印语句，其实就是基于刚刚打开并创建的 0,1,2 三个文件描述符而做出的操作。
 > 刚刚也说了 1 号文件描述符被当做标准输出，那我们进入 printf 的实现看看有没有用到它。
+
 ```c
 // git/Linux-0.11code/init/main.c
 static int printf(const char *fmt, ...)
@@ -3001,6 +3072,7 @@ static int printf(const char *fmt, ...)
 ```
 
 ## 进程2的创建
+
 ```c
 void init(void) {
     ...
@@ -3013,43 +3085,48 @@ void init(void) {
     ...
 }
 ```
+
 1. fork 一个新的子进程，此时就是进程 2 了。
    > 第一点，进程 1 打开了三个文件描述符并指向了 tty0，那这个也被复制到进程 2 了，具体说来就是进程结构 task_struct 里的 flip[] 数组被复制了一份。而进程 0 fork 出进程 1 时是没有复制这部分信息的，因为进程 0 没有打开任何文件。这也是刚刚说的与外设交互能力的体现，即进程 0 没有与外设交互的能力，进程 1 有，哎，其实就是这个 flip 数组里有没有东西而已嘛~
    > 第二点，进程 0 复制进程 1 时页表的复制只有 160 项，也就是映射 640K，而之后进程的复制，统统都是复制 1024 项，也就是映射 4M 空间。
-	```c
-	int copy_page_tables(unsigned long from,unsigned long to,long size) {
-		...
-		nr = (from==0)?0xA0:1024;
-		...
-	}
-    ```
-2. 在进程 2 里关闭（close） 0 号文件描述符。也就是进程 1 复制过来的打开了 tty0 并作为标准输入的文件描述符，那么此时 0 号文件描述符就空出来了。
-    ```c
-	// git/Linux-0.11code/fs/open.c
-	int sys_close(unsigned int fd)
-	{	
-		struct file * filp;
+   >
 
-		if (fd >= NR_OPEN)
-			return -EINVAL;
-		current->close_on_exec &= ~(1<<fd);
-		if (!(filp = current->filp[fd]))
-			return -EINVAL;
-		current->filp[fd] = NULL;	// 把要关闭的文件描述符对应的filp这一项设为NULL
-		if (filp->f_count == 0)
-			panic("Close: file count is 0");
-		if (--filp->f_count)
-			return (0);
-		iput(filp->f_inode);
-		return (0);
-	}
-	```
+   ```c
+   int copy_page_tables(unsigned long from,unsigned long to,long size) {
+   	...
+   	nr = (from==0)?0xA0:1024;
+   	...
+   }
+   ```
+2. 在进程 2 里关闭（close） 0 号文件描述符。也就是进程 1 复制过来的打开了 tty0 并作为标准输入的文件描述符，那么此时 0 号文件描述符就空出来了。
+   ```c
+   // git/Linux-0.11code/fs/open.c
+   int sys_close(unsigned int fd)
+   {
+   	struct file * filp;
+
+   	if (fd >= NR_OPEN)
+   		return -EINVAL;
+   	current->close_on_exec &= ~(1<<fd);
+   	if (!(filp = current->filp[fd]))
+   		return -EINVAL;
+   	current->filp[fd] = NULL;	// 把要关闭的文件描述符对应的filp这一项设为NULL
+   	if (filp->f_count == 0)
+   		panic("Close: file count is 0");
+   	if (--filp->f_count)
+   		return (0);
+   	iput(filp->f_inode);
+   	return (0);
+   }
+   ```
 3. 只读形式打开（open） rc 文件。刚好占据了 0 号文件描述符的位置。这个 rc 文件表示配置文件，具体什么内容，取决于你的硬盘里这个位置处放了什么内容，与操作系统内核无关，所以我们暂且不用管。到目前为止，进程 2 与进程 1 的区别，仅仅是将 0 号文件描述符重新指向了 /etc/rc 文件，其他的没啥区别。
 4. 然后执行（execve） sh 程序。好，接下来进程 2 就将变得不一样了，会通过一个经典的，也是最难理解的 execve 函数调用，使自己摇身一变，成为 /bin/sh 程序继续运行
 
 ## 扒开execve的皮
+
 > 进程 1 再次通过 fork 函数创建了进程 2，且进程 2 通过 close 和 open 函数，将 0 号文件描述符指向的标准输入 /dev/tty0 更换为指向 /etc/rc 文件。
 > 此时进程 2 和进程 1 几乎是完全一样的。接下来进程 2 就将变得不一样了，会通过一个经典的，也是最难理解的 execve 函数调用，使自己摇身一变，成为 /bin/sh 程序继续运行！
+
 ```c
 static char * argv_rc[] = { "/bin/sh", NULL };
 static char * envp_rc[] = { "HOME=/", NULL };
@@ -3094,7 +3171,7 @@ int do_execve(unsigned long * eip,long tmp,char * filename,
 		return -ENOENT;
 	argc = count(argv);
 	envc = count(envp);
-	
+
 restart_interp:
 	if (!S_ISREG(inode->i_mode)) {	/* must be regular file */
 		retval = -EACCES;
@@ -3299,11 +3376,13 @@ exec_error1:
 	return(retval);
 }
 ```
+
 - eip 调用方触发系统调用时由 CPU 压入栈空间中的 eip 的指针 。
 - tmp 是一个无用的占位参数。
 - filename 是 "/bin/sh"
 - argv 是 { "/bin/sh", NULL }
 - envp 是 { "HOME=/", NULL }
+
 ```c
 int do_execve(...) {
     // 检查文件类型和权限等
@@ -3330,14 +3409,18 @@ int do_execve(...) {
     ...
 }
 ```
+
 ## 调试Linux最早期的代码
+
 > https://github.com/yuan-xy/Linux-0.11
 
 ## 缺页中断
+
 > 之前的进程 1 通过 fork + execve 这两个函数的组合，创建了一个新的进程去加载并执行了 shell 程序。我们仅仅是通过 execve，使得下一条 CPU 指令将会执行到 /bin/sh 程序所在的内存起始位置处，也就是 /bin/sh 头部结构中 a_entry 所描述的地址。但有个问题是，我们仅仅将 /bin/sh 文件的头部加载到了内存，其他部分并没有进行加载，那我们是怎么执行到的 /bin/sh 的程序指令呢？
-**跳转到一个不存在的地址会发生什么**
+> **跳转到一个不存在的地址会发生什么**
 > /bin/sh 这个文件并不是 Linux 0.11 源码里的内容，Linux 0.11 只管按照 a.out 这种格式去解读它，跳转到 a.out 格式头部数据结构 exec.a_entry 所指向的内存地址去执行指令。所以这个 a_entry 的值是多少，就完全取决于硬盘中 /bin/sh 这个文件是怎么构造的了，我们简单点，就假设它为 0，这表示随后的 CPU 将跳转到 0 地址处进行执行。当然，这个 0 仅仅表示逻辑地址，既没有进行分段，也没有进行分页。Linux 0.11 的每个进程是通过不同的局部描述符在线性地址空间中瓜分出不同的空间，一个进程占 64M。由于我们现在所处的代码是属于进程 2，所以逻辑地址 0 通过分段机制映射到线性地址空间，就是 0x8000000，表示 128M 位置处。128M 这个线性地址，随后将会通过分页机制的映射转化为物理地址，这才定位到最终的真实物理内存。可是，128M 这个线性地址并没有页表映射它，也就是因为上面我们说的，我们除了 /bin/sh 文件的头部加载到了内存外，其他部分并没有进行加载操作。再准确点说，是 0x8000000 这个线性地址的访问，遇到了页表项的存在位 P 等于 0 的情况。
 > 一旦遇到了这种情况，CPU 会触发一个中断：**页错误（Page-Fault）**
+
 ```c
 void do_page_fault(..., unsigned long error_code) {
     ...   
@@ -3408,8 +3491,10 @@ void do_no_page(unsigned long address) {
     put_page(page,address);
 }
 ```
+
 > 缺页产生的线性地址，之前假设过了，是 0x8000000，也就是进程 2 自己线性地址空间的起始处 128M 这个位置。由于我们的页表映射是以页为单位的，所以首先计算出 address 所在的页，其实就是完成一次 4KB 的对齐。此时 address 对齐后仍然是 0x8000000。这个地址是整个线性地址空间的地址，但对于进程 2 自己来说，需要计算出相对于进程 2 的偏移地址，也就是去掉进程 2 的段基址部分。所以偏移地址 tmp 计算后等于 0，这和我们之前假设的 a_entry = 0 是一致的。
 > 从硬盘的哪个位置开始读呢？首先 0 内存地址，应该就对应着这个文件 0 号数据块，当然由于 /bin/sh 这个 a.out 格式的文件使用了 1 个数据块作为头部 exec 结构，所以我们跳过头部，从文件 1 号数据块开始读。读多少块呢？因为硬盘中的 1 个数据块为 1024 字节，而一页内存为 4096 字节，所以要读 4 块，这就是 nr[4] 的缘故。之后读取数据主要是两个函数，bmap 负责将相对于文件的数据块转换为相对于整个硬盘的数据块，比如这个文件的第 1 块数据，可能对应在整个硬盘的第 24 块的位置。bread_page 就是连续读取 4 个数据块到 1 页内存的函数，这个函数原理就复杂了，之后第五部分会讲这块的内容，但站在用户层的效果很好理解，就是把硬盘数据复制到内存罢了。
+
 ```c
 // memory.c
 unsigned long put_page(unsigned long page,unsigned long address) {
@@ -3427,7 +3512,9 @@ unsigned long put_page(unsigned long page,unsigned long address) {
 ```
 
 ## shell程序跑起来了
+
 > **xv6**是一个非常非常经典且简单的操作系统，是由麻省理工学院为操作系统工程的课程开发的一个教学目的的操作系统，所以非常适合操作系统的学习。
+
 ```c
 // xv6-public sh.c
 int main(void) {
@@ -3443,7 +3530,9 @@ int main(void) {
     }
 }
 ```
+
 > 总得来说，shell 程序就是个死循环，它永远不会自己退出，除非我们手动终止了这个 shell 进程。在死循环里面，shell 就是不断读取（getcmd）我们用户输入的命令，创建一个新的进程（fork），在新进程里执行（runcmd）刚刚读取到的命令，最后等待（wait）进程退出，再次进入读取下一条命令的循环中。
+
 ```c
 void runcmd(struct cmd *cmd) {
     ...
@@ -3455,8 +3544,10 @@ void runcmd(struct cmd *cmd) {
 ```
 
 ## 操作系统启动完毕
+
 > 我们先是建立了操作系统的一些最基本的环境与管理结构，然后由进 0 fork 出处于用户态执行的进程 1，进程 1 加载了文件系统并打开终端文件，紧接着就 fork 出了进程 2，进程 2 通过我们刚刚讲述的 execve 函数将自己替换成了 shell 程序。
 > shell 程序有个特点，就是如果标准输入为一个普通文件，比如 /etc/rc，那么文件读取后就会使得 shell 进程退出，如果是字符设备文件，比如由我们键盘输入的 /dev/tty0，则不会使 shell 进程退出。所以，这个 /etc/rc 文件可以写一些你觉得在正式启动大死循环的 shell 程序之前，要做的一些事，比如启动一个登陆程序，让用户输入用户名和密码。
+
 ```c
 // main.c
 void main(void) {
@@ -3497,11 +3588,13 @@ void init(void) {
 ```
 
 ## 第四部分总结
+
 1. 第一部分 | 进入内核前的苦力活 完成了执行 main 方法前的准备工作，如加载内核代码，开启保护模式，开启分页机制等工作，对应内核源码中 boot 文件夹里的三个汇编文件 bootsect.s setup.s head.s。
 2. 第二部分 | 大战前期的初始化工作 完成了内核中各种管理结构的初始化，如内存管理结构初始化 mem_init，进程调度管理结构初始化 shed_init 等，对应 main 方法中的 xxx_init 系列方法。
 3. 第三部分 | 一个新进程的诞生 讲述了 fork 函数的原理，也就是进程 0 创建进程 1 的过程，对应 main 方法中的 fork 函数。
 4. 第四部分 | shell 程序的到来 讲述了从加载根文件系统到最终创建出与用户交互的 shell 进程的过程，对应 main 方法中的 init 函数。
-**至此操作系统启动完毕，达到怠速状态。**
+   **至此操作系统启动完毕，达到怠速状态。**
+
 ```c
 --- 第一部分 进入内核前的苦力活 ---
 bootsect.s
@@ -3533,9 +3626,11 @@ void main(void) {
 ```
 
 ## 用键盘输入一条命令
+
 > cat info.txt | wc -l
-**为什么我们按下键盘后，屏幕上就会出现如此的变化呢？**
+> **为什么我们按下键盘后，屏幕上就会出现如此的变化呢？**
 > 首先，得益于 第16回 | 控制台初始化 tty_init 中讲述的一行代码。
+
 ```c
 // console.c
 void con_init(void) {
@@ -3544,7 +3639,9 @@ void con_init(void) {
     ...
 }
 ```
+
 > 我们成功将键盘中断绑定在了 keyboard_interrupt 这个中断处理函数上，也就是说当我们按下键盘 'c' 时，CPU 的中断机制将会被触发，最终执行到这个 keyboard_interrupt 函数中。
+
 ```c
 // keyboard.s
 keyboard_interrupt:
@@ -3560,7 +3657,9 @@ keyboard_interrupt:
     call do_tty_interrupt
     ...
 ```
+
 > 首先通过 IO 端口操作，从键盘中读取了刚刚产生的键盘扫描码，就是刚刚按下 'c' 的时候产生的键盘扫描码。随后，在 key_table 中寻找不同按键对应的不同处理函数，比如普通的一个字母对应的字符 'c' 的处理函数为 do_self，该函数会将扫描码转换为 ASCII 字符码，并将自己放入一个队列里，我们稍后再说这部分的细节。接下来，就是调用 do_tty_interrupt 函数，见名知意就是处理终端的中断处理函数，注意这里传递了一个参数 0。
+
 ```c
 // tty_io.c
 void do_tty_interrupt(int tty) {
@@ -3571,8 +3670,10 @@ void copy_to_cooked(struct tty_struct * tty) {
     ...
 }
 ```
+
 > 这个函数几乎什么都没做，将 keyboard_interrupt 时传入的参数 0，作为 tty_table 的索引，找到 tty_table 中的第 0 项作为下一个函数的入参，仅此而已。
 > tty_table 是终端设备表，在 Linux 0.11 中定义了三项，分别是控制台、串行终端 1 和串行终端 2。
+
 ```c
 // tty.h
 struct tty_struct tty_table[] = {
@@ -3589,7 +3690,9 @@ struct tty_struct tty_table[] = {
     {...}
 };
 ```
+
 > 我们用的往屏幕上输出内容的终端，就是 0 号索引位置处的控制台终端，所以我将另外两个终端定义的代码省略掉了。tty_table 终端设备表中的每一项结构，是 tty_struct，用来描述一个终端的属性。
+
 ```c
 struct tty_struct {
     struct termios termios;
@@ -3609,9 +3712,11 @@ struct tty_queue {
     char buf[TTY_BUF_SIZE];
 };
 ```
+
 > termios 是定义了终端的各种模式，包括读模式、写模式、控制模式等
 > void (*write)(struct tty_struct * tty) 是一个接口函数，在刚刚的 tty_table 中我们也可以看出被定义为了 con_write，也就是说今后我们调用这个 0 号终端的写操作时，将会调用的是这个 con_write 函数，这不就是接口思想么。
 > 还有三个队列分别为读队列 read_q，写队列 write_q 以及一个辅助队列 secondary。
+
 ```c
 // tty_io.c
 void do_tty_interrupt(int tty) {
@@ -3632,7 +3737,9 @@ void copy_to_cooked(struct tty_struct * tty) {
     wake_up(&tty->secondary.proc_list);
 }
 ```
+
 > 在 copy_to_cooked 函数里就是个大循环，只要读队列 read_q 不为空，且辅助队列 secondary 没有满，就不断从 read_q 中取出字符，经过一大坨的处理，写入 secondary 队列里。否则，就唤醒等待这个辅助队列 secondary 的进程，之后怎么做就由进程自己决定。
+
 ```c
 #define IUCLC   0001000
 #define _I_FLAG(tty,f)  ((tty)->termios.c_iflag & f)
@@ -3646,8 +3753,10 @@ void copy_to_cooked(struct tty_struct * tty) {
     ...
 }
 ```
+
 > 这一大坨有太多太多的 if 判断，但都是围绕着同一个目的，我们举其中一个简单的例子。通过判断 tty 中的 termios，来决定对读出的字符 c 做一些处理。在这里，就是判断 termios 中的 c_iflag 中的第 4 位是否为 1，来决定是否要将读出的字符 c 由大写变为小写。
 > 这个 termios 就是定义了终端的模式。
+
 ```c
 struct termios {
     unsigned long c_iflag;      /* input mode flags */
@@ -3658,7 +3767,9 @@ struct termios {
     unsigned char c_cc[NCCS];   /* control characters */
 };
 ```
+
 **一、读队列 read_q 里的字符是什么时候放进去的？**
+
 ```c
 // keyboard.s
 keyboard_interrupt:
@@ -3682,7 +3793,9 @@ key_table:
     .long do_self,do_self,do_self,do_self   /* 20-23 d f g h */
     ...
 ```
+
 > 普通的字符 abcd 这种，对应的处理函数是 do_self
+
 ```c
 // keyboard.s
 do_self:
@@ -3694,7 +3807,9 @@ do_self:
     // 放入队列
     call put_queue
 ```
+
 > 最后调用了 put_queue 函数，顾名思义放入队列
+
 ```c
 // tty_io.c
 struct tty_queue * table_list[]={
@@ -3710,9 +3825,11 @@ put_queue:
     movl head(%edx),%ecx
     ...
 ```
+
 > put_queue 正是操作了我们 tty_table 数组中的零号位置，也就是控制台终端 tty 的 read_q 队列，进行入队操作。
-**二、放入 secondary 队列之后呢？**
+> **二、放入 secondary 队列之后呢？**
 > 这就涉及到上层进程调用终端的读函数，将这个字符取走了。上层经过库函数、文件系统函数等，最终会调用到 tty_read 函数，将字符从 secondary 队列里取走。
+
 ```c
 // tty_io.c
 int tty_read(unsigned channel, char * buf, int nr) {
@@ -3721,8 +3838,10 @@ int tty_read(unsigned channel, char * buf, int nr) {
     ...
 }
 ```
+
 > 取走后要干嘛，那就是上层应用程序去决定的事情了。
 > 假如要写到控制台终端，那上层应用程序又会经过库函数、文件系统函数等层层调用，最终调用到 tty_write 函数。
+
 ```c
 // tty_io.
 int tty_write(unsigned channel, char * buf, int nr) {
@@ -3733,8 +3852,10 @@ int tty_write(unsigned channel, char * buf, int nr) {
     ...
 }
 ```
+
 > 这个函数首先会将字符 c 放入 write_q 这个队列，然后调用 tty 里设定的 write 函数。
 > 终端控制台这个 tty 我们之前说了，初始化的 write 函数是 con_write，也就是 console 的写函数。
+
 ```c
 // console.c
 void con_write(struct tty_struct * tty) {
@@ -3743,10 +3864,13 @@ void con_write(struct tty_struct * tty) {
 ```
 
 ## shell程序读取你的命令
+
 **shell 程序如何读取到你输入的这条命令的。**
+
 > 现状：
 > 第一，我们键盘输入的字符，此时已经到达了控制台终端 tty 结构中的 secondary 这个队列里。
 > 第二，shell 程序将通过上层的 read 函数调用，来读取这些字符。
+
 ```c
 // xv6-public sh.c
 int main(void) {
@@ -3784,8 +3908,10 @@ char* gets(char *buf, int max) {
     return buf;		// 读入的字符在 buf 里，遇到换行符后，这些字符将作为一个完整的命令，传入给 runcmd 函数，真正执行这个命令。
 }
 ```
+
 > read 函数是怎么把之前键盘输入并转移到 secondary 这个队列里的字符给读出来的。
 > read 函数是个用户态的库函数，最终会通过系统调用中断，执行 sys_read 函数。
+
 ```c
 // read_write.c
 // fd = 0, count = 1
@@ -3816,9 +3942,11 @@ int sys_read(unsigned int fd,char * buf,int count) {
     return -EINVAL;
 }
 ```
+
 > 这个最上层的 sys_read，把读取管道文件、字符设备文件、块设备文件、目录文件或普通文件，都放在了同一个方法里处理，这个方法作为所有读操作的统一入口，由此也可以看出 linux 下一切皆文件的思想。
 > read 的第一个参数是 0，也就是 0 号文件描述符，之前我们在讲第四部分的时候说过，shell 进程是由进程 1 通过 fork 创建出来的，而进程 1 在 init 的时候打开了 /dev/tty0 作为 0 号文件描述符。
 > 而这个 /dev/tty0 的文件类型，也就是其 inode 结构中表示文件类型与属性的 i_mode 字段，表示为字符型设备，所以最终会走到 rw_char 这个子方法下，文件系统的第一层划分就走完了。
+
 ```c
 // char_dev.c
 static crw_ptr crw_table[]={
@@ -3847,8 +3975,10 @@ static int rw_ttyx(int rw,unsigned minor,char * buf,int count,off_t * pos) {
         tty_write(minor,buf,count));
 }
 ```
+
 > 根据 dev 这个参数，计算出主设备号为 4，次设备号为 0，所以将会走到 rw_ttyx 方法继续执行。
 > 根据 rw == READ 走到读操作分支 tty_read，这就终于快和上一讲的故事接上了。
+
 ```c
 // tty_io.c
 // channel=0, nr=1
@@ -3925,7 +4055,9 @@ void wake_up(struct task_struct **p) {		// wake_up 函数更为简单，就是�
 ```
 
 ## 进程的阻塞与唤醒
+
 **进程状态**
+
 ```c
 // shed.h
 #define TASK_RUNNING 0      // 运行态
@@ -3934,7 +4066,9 @@ void wake_up(struct task_struct **p) {		// wake_up 函数更为简单，就是�
 #define TASK_ZOMBIE 3       // 僵死状态
 #define TASK_STOPPED 4      // 停止
 ```
+
 > 当进程首次被创建时，也就是 fork 函数执行后，它的初始状态是 0，也就是运行态。
+
 ```c
 // system_call.s
 _sys_fork:
@@ -3949,7 +4083,9 @@ int copy_process(...) {
     ...
 }
 ```
+
 > 只有当处于运行态的进程，才会被调度机制选中，送入 CPU 开始执行。
+
 ```c
 // sched.c
 void schedule (void) {
@@ -3962,9 +4098,11 @@ void schedule (void) {
     switch_to (next);
 }
 ```
+
 > 使得一个进程阻塞的方法非常简单，并不需要什么魔法，只需要将其 state 字段，变成非 TASK_RUNNING 也就是非运行态，即可让它暂时不被 CPU 调度，也就达到了阻塞的效果。
 > 同样，唤醒也非常简单，就是再将对应进程的 state 字段变成 TASK_RUNNING 即可。
 > Linux 0.11 中的阻塞与唤醒，就是 sleep_on 和 wake_up 函数。
+
 ```c
 // sched.c
 void sleep_on (struct task_struct **p) {
@@ -3983,7 +4121,9 @@ void wake_up (struct task_struct **p) {
 }
 }
 ```
+
 > 当某进程调用了 wake_up 函数唤醒 proc_list 上指向的第一个任务时，改任务变会在 sleep_on 函数执行完 schedule() 后被唤醒并执行下面的代码，把 tmp 指针指向的上一个任务也同样唤醒。唤醒后谁能优先抢到资源，那就得看调度的时机以及调度的机制了，对我们来说相当于听天由命了。
+
 ```c
 // sched.c
 void sleep_on (struct task_struct **p) {
@@ -3997,10 +4137,11 @@ void sleep_on (struct task_struct **p) {
         tmp->state = 0;
 }
 ```
+
 > 现在我们的 shell 进程，通过 read 函数，中间经过了层层封装，以及后面经过了阻塞与唤醒这一番折腾后，终于把键盘输入的字符们，成功由 tty 中的 secondary 队列，读取并存放与 buf 指向的内存地址处。
 
-
 ## 解析并执行shell命令
+
 ```c
 // xv6-public sh.c
 int main(void) {
@@ -4016,7 +4157,9 @@ int main(void) {
     }
 }
 ```
+
 > 首先 parsecmd 函数会将读取到 buf 的字符串命令做解析，生成一个 cmd 结构的变量，传入 runcmd 函数中。
+
 ```c
 // xv6-public sh.c
 void runcmd(struct cmd *cmd) {
@@ -4029,7 +4172,7 @@ void runcmd(struct cmd *cmd) {
         exec(ecmd->argv[0], ecmd->argv);
         ... 
         break;
-    
+  
         case REDIR: ...
         case LIST: ...		// 如果命令中有分号 ; 说明是多条命令的组合，那么就当作 LIST 拆分成多条命令依次执行。
         case PIPE: ...		// 如果命令中有竖线 | 说明是管道命令，那么就当作 PIPE 拆分成两个并发的命令，同时通过管道串联起输入端和输出端，来执行。
@@ -4037,8 +4180,10 @@ void runcmd(struct cmd *cmd) {
     }
 }
 ```
+
 > [root@linux0.11] cat info.txt | wc -l
 > 如何解析一个pipe命令
+
 ```c
 // xv6-public sh.c
 void runcmd(struct cmd *cmd) {
@@ -4070,7 +4215,9 @@ void runcmd(struct cmd *cmd) {
     ...
 }
 ```
+
 > pipe 就是创建一个管道，将传入数组 p 的 p[0] 指向这个管道的读口，p[1] 指向这个管道的写口，画图就是这样子的。这个管道的本质是一个文件，但是是属于管道类型的文件，所以它的本质的本质实际上是一块内存。这块内存被当作管道文件对上层提供了像访问文件一样的读写接口，只不过其中一个进程只能读，另一个进程只能写，所以再次抽象一下就像一个管道一样，数据从一端流向了另一段
+
 ```c
 // fs/pipe.c
 int sys_pipe(unsigned long * fildes) {
@@ -4102,7 +4249,9 @@ int sys_pipe(unsigned long * fildes) {
     return 0;
 }
 ```
+
 > 创建管道的方法 get_pipe_inode 方法如下
+
 ```c
 // fs.h
 #define PIPE_HEAD(inode) ((inode).i_zone[0])
@@ -4118,14 +4267,17 @@ struct m_inode * get_pipe_inode(void) {
     return inode;
 }
 ```
+
 > 不论是更换当前目录的 REDIR 也就是 cd 命令，还是用分号分隔开的 LIST 命令，还是我们上面讲到的 PIPE 命令，最终都会被拆解成一个个可以被解析为 EXEC 类型的命令。
 
 ## 读硬盘数据全流程
+
 > 将硬盘中的数据读入内存，听起来是个很简单的事情，但操作系统要考虑的问题很多。
-**如果让你来设计这个函数**
+> **如果让你来设计这个函数**
 > 设计这个函数第一个要指定的参数就可以是 fd 了，它仅仅是个数字。当然，之所以能这样方便，就要感谢刚刚说的文件系统建设以及打开文件的逻辑这两项工作
 > 之后，我们得告诉这个函数，把这个 fd 指向的硬盘中的文件，复制到内存中的哪个位置，复制多大。
 > 那更简单了，内存中的位置，我们用一个表示地址值的参数 buf，复制多大，我们用 count 来表示，单位是字节。
+
 ```c
 // read_write.c
 int sys_read(unsigned int fd,char * buf,int count) {
@@ -4155,7 +4307,9 @@ int sys_read(unsigned int fd,char * buf,int count) {
     return -EINVAL;
 }
 ```
+
 > 首先我先简化一下，去掉一些错误校验逻辑等旁路分支，并添加上注释。
+
 ```c
 // read_write.c
 int sys_read(unsigned int fd,char * buf,int count) {
@@ -4185,8 +4339,10 @@ int sys_read(unsigned int fd,char * buf,int count) {
     return -EINVAL;
 }
 ```
+
 > 由此也可以注意到，操作系统源码的设计比我刚刚说的更通用，我刚刚只让你设计了读取硬盘的函数，但其实在 Linux 下一切皆文件，所以这个函数将管道文件、字符设备文件、块设备文件、目录文件、普通文件分别指向了不同的具体实现。
 > 对 buf 区域的内存做校验 verify_area
+
 ```c
 // fork.c
 void verify_area(void * addr,int size) {		// addr 就是刚刚的 buf，size 就是刚刚的 count。然后这里又将 addr 赋值给了 start 变量。所以代码开始，start 就表示要复制到的内存的起始地址，size 就是要复制的字节数。
@@ -4202,9 +4358,11 @@ void verify_area(void * addr,int size) {		// addr 就是刚刚的 buf，size 就
     }
 }
 ```
+
 > 每个进程的 LDT 表，由 Linux 创建进程时的代码给规划好了。具体说来，就是如上图所示，每个进程的线性地址范围，是(进程号)*64M ~  (进程号+1)*64M
 > 而对于进程本身来说，都以为自己是从零号地址开始往后的 64M，所以传入的 start 值也是以零号地址为起始地址算出来的。
 > 但现在经过系统调用进入 sys_write 后会切换为内核态，内核态访问数据会通过基地址为 0 的全局描述符表中的数据段来访问数据。所以，start 要加上它自己进程的数据段基址，才对。
+
 ```c
 // memory.c
 void write_verify(unsigned long address) {
@@ -4218,7 +4376,9 @@ void write_verify(unsigned long address) {
     return;
 }
 ```
+
 **执行读操作 file_read**
+
 ```c
 // read_write.c
 int sys_read(unsigned int fd,char * buf,int count) {
@@ -4275,8 +4435,10 @@ static int _bmap(struct m_inode * inode,int block,int create) {
     // zone[8] 是二次间接索引，可以索引大于 512 的块号
 }
 ```
+
 > 整个条件判断的结构是根据 block 来划分的。block 就是要读取的块号，之所以要划分，就是因为 inode 在记录文件所在块号时，采用了多级索引的方式。
 > 那我们刚开始读，块号肯定从零开始，所以我们就先看 block<7，通过直接索引这种最简单的方式读的代码。
+
 ```c
 // inode.c
 static int _bmap(struct m_inode * inode,int block,int create) {
@@ -4292,8 +4454,10 @@ static int _bmap(struct m_inode * inode,int block,int create) {
     ...
 }
 ```
->  bmap 返回的，就是要读入的块号，从全局看在块设备的哪个逻辑块号下。
+
+> bmap 返回的，就是要读入的块号，从全局看在块设备的哪个逻辑块号下。
 > bread：将 bmap 获取的数据块号读入到高速缓冲块
+
 ```c
 // file_dev.c
 int file_read(struct m_inode * inode, struct file * filp, char * buf, int count) {
@@ -4317,8 +4481,10 @@ struct buffer_head * bread(int dev,int block) {
     return NULL;
 }
 ```
->  bread 方法就是根据一个设备号 dev 和一个数据块号 block，将这个数据块的数据，从硬盘复制到缓冲区里。
+
+> bread 方法就是根据一个设备号 dev 和一个数据块号 block，将这个数据块的数据，从硬盘复制到缓冲区里。
 > 先根据 hash 结构快速查找这个 dev 和 block 是否有对应存在的缓冲块。如果没有，那就从之前建立好的双向链表结构的头指针 free_list 开始寻找，直到找到一个可用的缓冲块。具体代码逻辑，还包含当缓冲块正在被其他进程使用，或者缓冲块对应的数据已经被修改时的处理逻辑，你可以看一看，关键流程我已加上了注释。
+
 ```c
 // buffer.c
 struct buffer_head * bread(int dev,int block) {
@@ -4382,8 +4548,10 @@ repeat:
     return bh;
 }
 ```
+
 > 经过 getblk 之后，我们就在内存中，找到了一处缓冲块，用来接下来存储硬盘中指定数据块的数据。那接下来的一步，自然就是把硬盘中的数据复制到这里啦，没错，ll_rw_block 就是干这个事的。
 > 再然后put_fs_byte 方法，一个字节一个字节地，将缓冲区里的数据，复制到用户指定的内存 buf 中去了，当然，只会复制 count 字节。
+
 ```c
 // segment.h
 extern _inline void
@@ -4401,7 +4569,9 @@ put_fs_byte (char val, char *addr) {
 ```
 
 ## 读取硬盘数据的细节
->  ll_rw_block 方法负责把硬盘中指定数据块中的数据，复制到 getblk 方法申请到的缓冲块里
+
+> ll_rw_block 方法负责把硬盘中指定数据块中的数据，复制到 getblk 方法申请到的缓冲块里
+
 ```c
 // buffer.c
 struct buffer_head * bread(int dev,int block) {
@@ -4417,7 +4587,7 @@ void ll_rw_block (int rw, struct buffer_head *bh) {
 
 struct request request[NR_REQUEST] = {0};
 static void make_request(int major,int rw, struct buffer_head * bh) {
-    struct request *req;    
+    struct request *req;  
     ...
     // 从 request 队列找到一个空位
     if (rw == READ)
@@ -4467,8 +4637,10 @@ static void add_request (struct blk_dev_struct *dev, struct request *req) {
     sti();
 }
 ```
+
 > 调用链很长，主线是从 request 数组中找到一个空位，然后作为链表项插入到 request 链表中。没错 request 是一个 32 大小的数组，里面的每一个 request 结构间通过 next 指针相连又形成链表。
 > request 的具体结构是。
+
 ```c
 // blk.h
 struct request {
@@ -4483,8 +4655,10 @@ struct request {
     struct request * next;
 };
 ```
+
 > 表示一个读盘的请求参数。
 > 那是谁不断从这个 request 队列中取出 request 结构并对硬盘发起读请求操作的呢？这里 Linux 0.11 有个很巧妙的设计，我们看看。
+
 ```c
 // blk.h
 struct blk_dev_struct {
@@ -4519,7 +4693,9 @@ static void add_request (struct blk_dev_struct *dev, struct request *req) {
     ...
 }
 ```
+
 > 当设备的当前请求项为空，也就是第一次收到硬盘操作请求时，会立即执行该设备的 request_fn 方法，这便是整个读盘循环的最初推手。当前设备的设备号是 3，也就是硬盘，会从 blk_dev 数组中取索引下标为 3 的设备结构。在 第20回 | 硬盘初始化 hd_init 的时候，设备号为 3 的设备结构的 request_fn 被赋值为硬盘请求函数 do_hd_request 了。
+
 ```c
 // hd.c
 void hd_init(void) {
@@ -4527,7 +4703,9 @@ void hd_init(void) {
     ...
 }
 ```
+
 > 刚刚的 request_fn 背后的具体执行函数，就是这个 do_hd_request。
+
 ```c
 #define CURRENT (blk_dev[MAJOR_NR].current_request)
 // hd.c
@@ -4565,9 +4743,11 @@ static void hd_out(unsigned int drive,unsigned int nsect,unsigned int sect,
     outb(cmd,++port);
 }
 ```
+
 > 可以看到，最底层的读盘请求，其实就是向一堆外设端口做读写操作。
 > 读硬盘就是，往除了第一个以外的后面几个端口写数据，告诉要读硬盘的哪个扇区，读多少。然后再从 0x1F0 端口一个字节一个字节的读数据。这就完成了一次硬盘读操作。当然，从 0x1F0 端口读出硬盘数据，是在硬盘读好数据并放在 0x1F0 后发起的硬盘中断，进而执行硬盘中断处理函数里进行的。
 > 在 第20回 | 硬盘初始化 hd_init 的时候，将 hd_interrupt 设置为了硬盘中断处理函数，中断号是 0x2E，代码如下。
+
 ```c
 // hd.c
 void hd_init(void) {
@@ -4640,5 +4820,148 @@ extern inline void end_request(int uptodate) {
 	// 随后，将当前设备的当前请求项 CURRENT，即 request 数组里的一个请求项 request 的 dev 置空，并将当前请求项指向链表中的下一个请求项。这样，do_hd_request 方法处理的就是下一个请求项的内容了，直到将所有请求项都处理完毕。整个流程就这样形成了闭环，通过这样的机制，可以做到好似存在一个额外的进程，在不断处理 request 链表里的读写盘请求一样。
     CURRENT->dev = -1;
     CURRENT = CURRENT->next;
+}
+```
+
+## 信号
+
+> 如果在你的程序正在被 shell 程序执行时，你**按下了键盘中的 CTRL+C**，你的程序就被迫终止，并再次返回到了 shell 等待用户输入命令的状态。
+>
+> 键盘中断处理函数自然会走到处理字符的 **copy_to_cooked** 函数里。
+
+```c
+#define INTMASK (1<<(SIGINT-1))
+// kernel/chr_drv/tty_io.c
+void copy_to_cooked (struct tty_struct *tty) {
+    ...
+    if (c == INTR_CHAR (tty)) {  	// 就是当 INTR_CHAR 发现字符为中断字符时（其实就是 CTRL+C），就调用 tty_intr 给进程发送信号。
+        tty_intr (tty, INTMASK);
+        continue;
+    }
+    ...
+}
+
+// kernel/chr_drv/tty_io.c
+void tty_intr (struct tty_struct *tty, int mask) {
+    int i;
+    ...
+    for (i = 0; i < NR_TASKS; i++) {
+        if (task[i] && task[i]->pgrp == tty->pgrp) {
+            task[i]->signal |= mask;
+        }
+    }
+}
+```
+
+> tty_intr 函数很简单，就是给所有组号等于 tty 组号的进程，发送信号。
+>
+> 而如何发送信号，在这段源码中也揭秘了，其实就是给进程 task_struct 结构中的 **signal** 的相应位置 1 而已。
+>
+> 发送什么信号，在上面的宏定义中也可以看出，就是 **SIGINT** 信号。SIGINT 就是个数字，它是几呢？它就定义在 **signal.h** 这个头文件里。
+
+```c
+// signal.h
+#define SIGHUP  1       /* hangup */
+#define SIGINT  2       /* interrupt */
+#define SIGQUIT 3       /* quit */
+#define SIGILL  4       /* illegal instruction (not reset when caught) */
+#define SIGTRAP 5       /* trace trap (not reset when caught) */
+#define SIGABRT 6       /* abort() */
+#define SIGPOLL 7       /* pollable event ([XSR] generated, not supported) */
+#define SIGIOT  SIGABRT /* compatibility */
+#define SIGEMT  7       /* EMT instruction */
+#define SIGFPE  8       /* floating point exception */
+#define SIGKILL 9       /* kill (cannot be caught or ignored) */
+#define SIGBUS  10      /* bus error */
+#define SIGSEGV 11      /* segmentation violation */
+#define SIGSYS  12      /* bad argument to system call */
+#define SIGPIPE 13      /* write on a pipe with no one to read it */
+#define SIGALRM 14      /* alarm clock */
+#define SIGTERM 15      /* software termination signal from kill */
+#define SIGURG  16      /* urgent condition on IO channel */
+#define SIGSTOP 17      /* sendable stop signal not from tty */
+#define SIGTSTP 18      /* stop signal from tty */
+#define SIGCONT 19      /* continue a stopped process */
+#define SIGCHLD 20      /* to parent on child stop or exit */
+#define SIGTTIN 21      /* to readers pgrp upon background tty read */
+#define SIGTTOU 22      /* like TTIN for output if (tp->t_local&LTOSTOP) */
+#define SIGIO   23      /* input/output possible signal */
+#define SIGXCPU 24      /* exceeded CPU time limit */
+#define SIGXFSZ 25      /* exceeded file size limit */
+#define SIGVTALRM 26    /* virtual time alarm */
+#define SIGPROF 27      /* profiling time alarm */
+#define SIGWINCH 28     /* window size changes */
+#define SIGINFO 29      /* information request */
+#define SIGUSR1 30      /* user defined signal 1 */
+#define SIGUSR2 31      /* user defined signal 2 */
+```
+
+> 现在这个进程的 tast_struct 结构中的 signal 就有了对应信号位的值，那么在下次时钟中断到来时，便会通过 **timer_interrupt** 这个时钟中断处理函数，一路调用到 **do_signal** 方法。
+
+```c
+// kernel/signal.c
+void do_signal (long signr ...) {
+    ...
+    struct sigaction *sa = current->sigaction + signr - 1;
+    sa_handler = (unsigned long) sa->sa_handler;
+    // 如果信号处理函数为空，则直接退出
+    if (!sa_handler) {
+        ...
+        do_exit (1 << (signr - 1));
+        ...
+    }
+    // 否则就跳转到信号处理函数的地方运行
+    *(&eip) = sa_handler;
+    ...
+}
+```
+
+> 进入 do_signal 函数后，如果当前信号 **signr** 对应的信号处理函数 sa_handler 为空时，就直接调用 do_exit 函数退出，也就是我们看到的按下 CTRL+C 之后退出的样子了。
+>
+> 但是，如果信号处理函数不为空，那么就通过将 sa_handler 赋值给 eip 寄存器，也就是指令寄存器的方式， **跳转到相应信号处理函数处运行** 。
+>
+> 怎么验证这一点呢？很简单，信号处理函数注册在每个进程 task_struct 中的 sigaction 数组中。只需要给 sigaction 对应位置处填写上信号处理函数即可。
+>
+> 那么如何注册这个信号处理函数呢，通过调用 signal 这个库函数即可。
+
+```c
+// signal.h
+struct  sigaction {
+    union __sigaction_u __sigaction_u;  /* signal handler */
+    sigset_t sa_mask;               /* signal mask to apply */
+    int     sa_flags;               /* see signal options below */
+};
+
+/* union for signal handlers */
+union __sigaction_u {
+    void    (*__sa_handler)(int);
+    void    (*__sa_sigaction)(int, struct __siginfo *,
+        void *);
+};
+
+// sched.h
+struct task_struct {
+    ...
+    struct sigaction sigaction[32];
+    ...
+}
+```
+
+> 示例
+
+```c
+#include <stdio.h>
+#include <signal.h>
+
+void int_handler(int signal_num) {
+    printf("signal receive %d\n", signal_num);
+    signal(SIGINT, NULL);	// 让第一次按下 CTRL+C 后的信号处理函数，把 SIGINT 的处理函数重新置空。
+}
+
+int main(int argc, char ** argv) {
+    signal(SIGINT, int_handler);	// 通过 signal 注册了 SIGINT 的信号处理函数，里面做的事情仅仅是打印一下信号值。编译并运行它，我们会发现在按下 CTRL+C 之后程序不再退出，而是输出了我们 printf 的话。
+    for(;;)
+        pause();
+    return 0;
 }
 ```
